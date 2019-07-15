@@ -4,8 +4,6 @@ So just write (or generate) json, and pass to dd-lua-tester to validate your lua
 
 ## Installation
 
-This will install `dd-lua-tester` and its common aliases to '/usr/local/bin' (the default is '~/bin')
-
 ```
-$ sudo lua dd-lua-tester install /usr/local/bin
+$ luarocks install dd-lua-tester
 ```
