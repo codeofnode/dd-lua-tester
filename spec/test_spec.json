@@ -1,4 +1,148 @@
 {
+  "before_each" : [
+  ],
+  "after_each" : [
+  ],
+  "setup" : [
+    {
+      "summary": "Creating an object",
+      "request": {
+        "method": "create",
+        "params": 1000
+      },
+      "extractors": {
+        "object": "output"
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1000
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "adding the balance",
+      "request": {
+        "method": "credit",
+        "params": 100
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1100
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "deducting the balance",
+      "request": {
+        "method": "debit",
+        "params": 100
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1000
+      }
+    }
+  ],
+  "teardown" : [
+    {
+      "summary": "Creating an object",
+      "request": {
+        "method": "create",
+        "params": 1000
+      },
+      "extractors": {
+        "object": "output"
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1000
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "adding the balance",
+      "request": {
+        "method": "credit",
+        "params": 100
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1100
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "deducting the balance",
+      "request": {
+        "method": "debit",
+        "params": 100
+      },
+      "assertions": {
+        "error": null
+      }
+    },
+    {
+      "require": "{{object}}",
+      "summary": "validating the balance",
+      "request": {
+        "method": "getBalance"
+      },
+      "assertions": {
+        "error": null,
+        "output": 1000
+      }
+    }
+  ],
   "tests" : [
     {
       "summary": "Creating an object",
