@@ -19,3 +19,5 @@ end
 function Account:getBalance()
    return self.balance
 end
+
+return Account

@@ -26,14 +26,5 @@ return function()
     exit(1)
   end
 
-  local rootFiles = cliArgs.ROOT
-  local patterns = cliArgs.pattern
-  local testFileLoader = require 'ddlt.modules.test_file_loader'(ddlt, cliArgs.loaders)
-  testFileLoader(rootFiles, patterns, {
-    excludes = cliArgs['exclude-pattern'],
-    verbose = cliArgs.verbose,
-    recursive = cliArgs['recursive'],
-  })
-
   return cliArgs
 end

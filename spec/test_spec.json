@@ -1,16 +1,6 @@
 {
   "tests" : [
     {
-      "summary": "Requiring the file",
-      "extractors": {
-        "module": "output"
-      },
-      "assertions": {
-        "error": {}
-      }
-    },
-    {
-      "require": "{{module}}",
       "summary": "Creating an object",
       "request": {
         "method": "create",

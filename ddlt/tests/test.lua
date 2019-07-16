@@ -1,27 +1,176 @@
-describe("Busted unit testing framework", function()
-  describe("should be awesome", function()
-    it("should be easy to use", function()
-      assert.truthy("Yup.")
-    end)
+local extractors = {}
+local path = require "pl.path"
+local jsonpath = require "jsonpath"
+local json = require "json"
+require "lfs"
 
-    it("should have lots of features", function()
-      -- deep check comparisons!
-      assert.are.same({ table = "great"}, { table = "great" })
+local function ternary(cond, T, F)
+  if cond then return T else return F end
+end
 
-      -- or check by reference!
-      assert.are_not.equal({ table = "great"}, { table = "great"})
+local function makeList(values)
+  return type(values) == 'table' and values or { values }
+end
 
-      assert.truthy("this is a string") -- truthy: not false or nil
+local function starts_with(str, start)
+  return str:sub(1, #start) == start
+end
 
-      assert.True(1 == 1)
-      assert.is_true(1 == 1)
+local function is_array(table)
+  if type(table) ~= 'table' then
+    return false
+  end
+  -- objects always return empty size
+  if #table > 0 then
+    return true
+  end
+  -- only object can have empty length with elements inside
+  for k, v in pairs(table) do
+    return false
+  end
+  -- if no elements it can be array and not at same time
+  return true
+end
 
-      assert.falsy(nil)
-      assert.has_error(function() error("Wat") end, "Wat")
-    end)
+local function ends_with(str, ending)
+  if str:sub(-#ending) == ending then
+    return str:sub(1, #ending-1)
+  end
+end
 
-    it("should provide some shortcuts to common functions", function()
-      assert.are.unique({{ thing = 1 }, { thing = 2 }, { thing = 3 }})
-    end)
+local function queryJson(data, path)
+  local res = data;
+  if (type(data) == 'table' and data ~= nil) then
+    if starts_with(path, 'LEN()<') then
+      return #(jsonpath.query(data, path:sub(7)))
+    elseif (type(path) == 'string' and starts_with(path, 'TYPEOF<')) then
+      return type(jsonpath.query(data, path:sub(8))[1])
+    elseif starts_with(path, 'ARRAY<') then
+      return jsonpath.query(data, path:sub(7))
+    elseif string.find(path, '<', 1, true) == 6 then
+      local count = tonumber(path:substr(1, 6), 10)
+      if count ~= nil then
+        return jsonpath.query(data, path:sub(7), count);
+      end
+    end
+    res = jsonpath.query(data, path, 1);
+    res = is_array(res) and ternary(#res < 2, res[1], res);
+  end
+  return res
+end
+
+local function hasVariable(str)
+  return type(str) == 'string' and starts_with(str, '{{') and ends_with(str, '}}') ~= nil
+end
+
+local function resolveVar(str, from)
+  if from == nil then
+    from = extractors
+  end
+  if hasVariable(str) then
+    return queryJson(from, (ternary(starts_with(str, '$.'), '', '$.'))..str:sub(3, -3))
+  end
+  return str
+end
+
+local function deepResolve(e)
+  if type(e) == "table" then
+    for k,v in pairs(e) do
+      local nk = resolveVar(k)
+      e[ternary(type(nk) == 'string', nk, k)] = deepResolve(v)
+    end
+    return e
+  elseif type(e) == 'string' then
+    return resolveVar(e)
+  else
+    return e
+  end
+end
+
+local function load_json(path)
+  local contents = ""
+  local myTable = {}
+  local file = io.open( path, "r" )
+
+  if file then
+      -- read all contents of file into a string
+      local contents = file:read( "*a" )
+      myTable = json.decode(contents);
+      io.close( file )
+      return myTable
+  end
+  return nil
+end
+
+local function forOneTS(tsName, patt)
+  local tsData = load_json(path.normpath(path.join(DDLT_GLOBAL_ARGS["d"], tsName..patt)))
+  extractors["_context"] = require(path.join(DDLT_GLOBAL_ARGS["d"], tsName))
+  describe(tsName, function()
+    for count = 1, #tsData["tests"] do
+      local test = tsData["tests"][count]
+      it(test['summary'], function()
+        local currentContext = _G
+        if type(test["require"]) == "string" then
+          if test["require"] ~= "$global" then
+            currentContext = resolveVar(test['require'])
+          end
+        else
+          currentContext = extractors["_context"]
+        end
+        local func = resolveVar(test["request"]["method"])
+        local result = {}
+        if type(currentContext[func]) == "function" then
+          local params = makeList(deepResolve(test["request"]["params"]))
+          local ok,err = currentContext[func](currentContext,unpack(params))
+          result['output'] = ok
+          result['error'] = err
+          if type(test["extractors"]) == "table" then
+            for k,v in pairs(test["extractors"]) do
+              local nk = resolveVar(k)
+              if type(nk) == 'string' and hasVariable(nk) == false then
+                extractors[nk] = queryJson(result,v)
+              end
+            end
+          end
+          if type(test["assertions"]) == "table" then
+            for k,v in pairs(test["assertions"]) do
+              assert.are.same(queryJson(result,resolveVar(k)), deepResolve(v))
+            end
+          end
+        end
+      end)
+    end
   end)
-end)
+end
+
+for count = 1, #DDLT_GLOBAL_ARGS["root"] do
+  local dir = DDLT_GLOBAL_ARGS["root"][count]
+  assert(dir and dir ~= "", "Please pass directory parameter")
+  if string.sub(dir, -1) == "/" then
+    dir=string.sub(dir, 1, -2)
+  end
+
+  local function yieldtree(dir)
+    for entry in lfs.dir(dir) do
+      if entry ~= "." and entry ~= ".." then
+        entry=dir.."/"..entry
+        local attr=lfs.attributes(entry)
+        local tsName = false
+        local patt = false
+        for c = 1, #DDLT_GLOBAL_ARGS["p"] do
+          tsName = ends_with(entry, DDLT_GLOBAL_ARGS["p"][c])
+          patt = DDLT_GLOBAL_ARGS["p"][c]
+          break
+        end
+        if tsName then
+          forOneTS(tsName, patt)
+        end
+        if attr.mode == "directory" then
+          yieldtree(entry)
+        end
+      end
+    end
+  end
+
+  yieldtree(dir)
+end

@@ -26,16 +26,6 @@ return function(options)
     return type(values) == 'table' and values or { values }
   end
 
-  local function fixupList(values, sep)
-    local sep = sep or ','
-    local list = type(values) == 'table' and values or { values }
-    local olist = {}
-    for _, v in ipairs(list) do
-      tablex.insertvalues(olist, utils.split(v, sep))
-    end
-    return olist
-  end
-
   local function processOption(key, value, altkey, opt)
     if altkey then cliArgsParsed[altkey] = value end
     cliArgsParsed[key] = value
@@ -46,12 +36,6 @@ return function(options)
     local sep = sep or ''
     if not s1 then return s2 end
     return s1 .. sep .. s2
-  end
-
-  local function processLoaders(key, value, altkey, opt)
-    local loaders = append(cliArgsParsed[key], value, ',')
-    processOption(key, loaders, altkey, opt)
-    return true
   end
 
   local function processArg(key, value)
@@ -87,10 +71,9 @@ return function(options)
   cli:option('-p, --pattern=PATTERN', 'only run test files matching the Lua pattern', defaultPattern, processMultiOption)
   cli:option('--exclude-pattern=PATTERN', 'do not run test files matching the Lua pattern, takes precedence over --pattern', nil, processMultiOption)
 
-  cli:option('-f, --config-file=FILE', 'load configuration options from FILE', nil, processOption)
-  cli:option('--loaders=NAME', 'test file loaders', defaultLoaders, processLoaders)
+  cli:option('-c, --ddlt-file=FILE', 'load configuration options from FILE', nil, processOption)
   cli:option('-C, --directory=DIR', 'change to directory DIR before running tests. If multiple options are specified, each is interpreted relative to the previous one.', './', processDir)
-  cli:option('-b, --busted-config-file=FILE', 'load configuration options for busted options', nil, processOption)
+  cli:option('-f, --config-file=FILE', 'load configuration options for busted options', nil, processOption)
   cli:flag('-v, --[no-]verbose', 'verbose output of errors', false, processOption)
   cli:flag('-R, --[no-]recursive', 'recurse into subdirectories', true, processOption)
 
@@ -104,12 +87,12 @@ return function(options)
 
     -- Load ddlt config file if available
     local ddltConfigFilePath
-    if cliArgs.f then
+    if cliArgs.c then
       -- if the file is given, then we require it to exist
-      if not path.isfile(cliArgs.f) then
-        return nil, ("specified config file '%s' not found"):format(cliArgs.f)
+      if not path.isfile(cliArgs.c) then
+        return nil, ("specified config file '%s' not found"):format(cliArgs.c)
       end
-      ddltConfigFilePath = cliArgs.f
+      ddltConfigFilePath = cliArgs.c
     else
       -- try default file
       ddltConfigFilePath = path.normpath(path.join(cliArgs.directory, '.ddlt'))
@@ -120,12 +103,12 @@ return function(options)
 
     -- Load busted config file if available
     local bustedConfigFilePath
-    if cliArgs.b then
+    if cliArgs.f then
       -- if the file is given, then we require it to exist
-      if not path.isfile(cliArgs.b) then
-        return nil, ("specified config file '%s' not found"):format(cliArgs.b)
+      if not path.isfile(cliArgs.f) then
+        return nil, ("specified config file '%s' not found"):format(cliArgs.f)
       end
-      bustedConfigFilePath = cliArgs.b
+      bustedConfigFilePath = cliArgs.f
     else
       -- try default file
       bustedConfigFilePath = path.normpath(path.join(cliArgs.directory, '.busted'))
@@ -168,7 +151,9 @@ return function(options)
       end
     end
 
-    arg[1] = script_path()..'../tests/test.lua'
+    table.insert(arg, 1, '-o')
+    table.insert(arg, 2, 'TAP')
+    table.insert(arg, 3, script_path()..'../tests/test.lua')
     bustedArgs['standalone'] = false
     cliArgs.bustedArgs = bustedArgs
     cliArgs.cli = true
@@ -176,7 +161,6 @@ return function(options)
     -- Ensure multi-options are in a list
     cliArgs.pattern = makeList(cliArgs.pattern)
     cliArgs.p = cliArgs.pattern
-    cliArgs.loaders = fixupList(cliArgs.loaders)
     cliArgs['exclude-pattern'] = makeList(cliArgs['exclude-pattern'])
 
     return cliArgs
