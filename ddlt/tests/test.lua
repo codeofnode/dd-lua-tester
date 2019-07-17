@@ -1,4 +1,5 @@
 local extractors = {}
+local lustache = require "lustache"
 local path = require "pl.path"
 local jsonpath = require "jsonpath"
 local json = require "json"
@@ -81,7 +82,7 @@ local function queryJson(data, path)
   return res
 end
 
-local function hasVariable(str)
+local function isFullVariable(str)
   return type(str) == 'string' and starts_with(str, '{{') and ends_with(str, '}}') ~= nil
 end
 
@@ -89,10 +90,13 @@ local function resolveVar(str, from)
   if from == nil then
     from = extractors
   end
-  if hasVariable(str) then
-    return queryJson(from, (ternary(starts_with(str, '$.'), '', '$.'))..str:sub(3, -3))
+  if isFullVariable(str) then
+    local result = queryJson(from, (ternary(starts_with(str, '$.'), '', '$.'))..str:sub(3, -3))
+    if result ~= str then
+      return result
+    end
   end
-  return str
+  return lustache:render(str, from)
 end
 
 local function deepResolve(e)
@@ -179,7 +183,7 @@ local function callTests(tsName, tests, notTc)
       if type(test["extractors"]) == "table" then
         for k,v in pairs(test["extractors"]) do
           local nk = resolveVar(k)
-          if type(nk) == 'string' and hasVariable(nk) == false then
+          if type(nk) == 'string' and isFullVariable(nk) == false then
             extractors[nk] = queryJson(result,v)
           end
         end

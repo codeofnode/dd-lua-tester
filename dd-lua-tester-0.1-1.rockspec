@@ -15,6 +15,7 @@ description = {
 dependencies = {
   'lua >= 5.1',
   'lpeg = 1.0.2',
+  'lustache = 1.3.1',
   'lua_cliargs = 3.0',
   'penlight >= 1.3.2',
   'busted = 2.0.0',
