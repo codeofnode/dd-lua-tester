@@ -64,9 +64,10 @@ return function(options)
   cli:option('-p, --pattern=PATTERN', 'only run test files matching the Lua pattern', defaultPattern, processMultiOption)
   cli:option('--exclude-pattern=PATTERN', 'do not run test files matching the Lua pattern, takes precedence over --pattern', nil, processMultiOption)
 
-  cli:option('-c, --ddlt-file=FILE', 'load configuration options from FILE', nil, processOption)
+  cli:option('-F, --ddlt-file=FILE', 'load configuration options from FILE', nil, processOption)
   cli:option('-C, --directory=DIR', 'change to directory DIR before running tests. If multiple options are specified, each is interpreted relative to the previous one.', './', processDir)
   cli:option('-f, --config-file=FILE', 'load configuration options for busted options', nil, processOption)
+  cli:flag('-c, --[no-]coverage', 'do code coverage analysis (requires `LuaCov` to be installed)', false, processOption)
   cli:flag('-v, --[no-]verbose', 'verbose output of errors', false, processOption)
   cli:flag('-R, --[no-]recursive', 'recurse into subdirectories', true, processOption)
 
@@ -80,12 +81,12 @@ return function(options)
 
     -- Load ddlt config file if available
     local ddltConfigFilePath
-    if cliArgs.c then
+    if cliArgs.F then
       -- if the file is given, then we require it to exist
-      if not path.isfile(cliArgs.c) then
-        return nil, ("specified config file '%s' not found"):format(cliArgs.c)
+      if not path.isfile(cliArgs.F) then
+        return nil, ("specified config file '%s' not found"):format(cliArgs.F)
       end
-      ddltConfigFilePath = cliArgs.c
+      ddltConfigFilePath = cliArgs.F
     else
       -- try default file
       ddltConfigFilePath = path.normpath(path.join(cliArgs.directory, '.ddlt'))
@@ -144,9 +145,7 @@ return function(options)
       end
     end
 
-    table.insert(arg, 1, '-o')
-    table.insert(arg, 2, 'TAP')
-    table.insert(arg, 3, script_path()..'../tests/test.lua')
+    table.insert(arg, script_path()..'../tests/test.lua')
     bustedArgs['standalone'] = false
     cliArgs.bustedArgs = bustedArgs
     cliArgs.cli = true

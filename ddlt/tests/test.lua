@@ -34,7 +34,7 @@ end
 
 local function ends_with(str, ending)
   if str:sub(-#ending) == ending then
-    return str:sub(1, #ending-1)
+    return str:sub(1, -(#ending+1))
   end
 end
 
@@ -107,7 +107,12 @@ local function callTests(tests, notTc)
       local currentContext = _G
       if type(test["require"]) == "string" then
         if test["require"] ~= "$global" then
-          currentContext = resolveVar(test['require'])
+          local resolvedRequire = resolveVar(test['require'])
+          if type(resolvedRequire) == "string" then
+            currentContext = require(resolvedRequire)
+          else
+            currentContext = resolvedRequire
+          end
         end
       else
         currentContext = extractors["_context"]
@@ -118,13 +123,15 @@ local function callTests(tests, notTc)
         result["error"] = nil
       else
         local func = resolveVar(test["request"]["method"])
-        local funcToCall = currentContext[func]
-        if type(funcToCall) ~= "function" and type(currentContext) == "function" then
+        local funcToCall = nil
+        if func == nil and type(currentContext) == "function" then
           funcToCall = currentContext
+        elseif type(func) == "string" then
+          funcToCall = currentContext[func]
         end
         if type(funcToCall) == "function" then
           local params = makeList(deepResolve(test["request"]["params"]))
-          local ok,err = currentContext[func](currentContext,unpack(params))
+          local ok,err = funcToCall(currentContext,unpack(params))
           result['output'] = ok
           result['error'] = err
         end
@@ -152,8 +159,8 @@ local function callTests(tests, notTc)
 end
 
 local function forOneTS(tsName, patt)
-  local tsData = load_json(path.normpath(path.join(DDLT_GLOBAL_ARGS["d"], tsName..patt)))
-  extractors["_context"] = require(path.join(DDLT_GLOBAL_ARGS["d"], tsName))
+  local tsData = load_json(tsName..patt)
+  extractors["_context"] = require(tsName)
   if is_array(tsData['setup']) then
     lazy_setup(function()
       callTests(tsData['setup'], true)
@@ -188,23 +195,27 @@ for count = 1, #DDLT_GLOBAL_ARGS["root"] do
     dir=string.sub(dir, 1, -2)
   end
 
-  local function yieldtree(dir)
+  local function yieldtree(localdir)
+    local dir = path.join(DDLT_GLOBAL_ARGS['d'], localdir)
     for entry in lfs.dir(dir) do
       if entry ~= "." and entry ~= ".." then
-        entry=dir.."/"..entry
-        local attr=lfs.attributes(entry)
+        entry = path.join(localdir, entry)
+        local attr=lfs.attributes(path.join(DDLT_GLOBAL_ARGS['d'], entry))
         local tsName = false
         local patt = false
-        for c = 1, #DDLT_GLOBAL_ARGS["p"] do -- luacheck:ignore
-          tsName = ends_with(entry, DDLT_GLOBAL_ARGS["p"][c])
-          patt = DDLT_GLOBAL_ARGS["p"][c]
-          break
-        end
-        if tsName then
-          forOneTS(tsName, patt)
-        end
         if attr.mode == "directory" then
           yieldtree(entry)
+        else
+          for c = 1, #DDLT_GLOBAL_ARGS["p"] do -- luacheck:ignore
+            tsName = ends_with(entry, DDLT_GLOBAL_ARGS["p"][c])
+            if tsName then
+              patt = DDLT_GLOBAL_ARGS["p"][c]
+              break
+            end
+          end
+          if tsName then
+            forOneTS(tsName, patt)
+          end
         end
       end
     end
