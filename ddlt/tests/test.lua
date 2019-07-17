@@ -92,11 +92,14 @@ local function resolveVar(str, from)
   end
   if isFullVariable(str) then
     local result = queryJson(from, (ternary(starts_with(str, '$.'), '', '$.'))..str:sub(3, -3))
-    if result ~= str then
+    if type(result) ~= "string" or result ~= str then
       return result
     end
   end
-  return lustache:render(str, from)
+  if type(str) == 'string' then
+    return lustache:render(str, from)
+  end
+  return str
 end
 
 local function deepResolve(e)
@@ -152,7 +155,7 @@ local function callTests(tsName, tests, notTc)
         local func = resolveVar(test["request"]["method"])
         local funcToCall = nil
         local directFuncCall = false
-        if func == nil and type(currentContext) == "function" then
+        if (func == nil or func == "") and type(currentContext) == "function" then
           directFuncCall = true
           funcToCall = currentContext
         elseif type(func) == "string" then
