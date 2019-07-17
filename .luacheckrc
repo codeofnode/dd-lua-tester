@@ -7,8 +7,8 @@ globals = {
   "assert",
   "DDLT_GLOBAL_ARGS",
   "it",
-  "lazy_setup",
-  "lazy_teardown",
+  "setup",
+  "teardown",
   "before_each",
   "after_each",
   "describe"

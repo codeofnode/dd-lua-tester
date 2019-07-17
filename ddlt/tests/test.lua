@@ -4,6 +4,18 @@ local jsonpath = require "jsonpath"
 local json = require "json"
 local lfs = require "lfs"
 
+local function catch(what)
+   return what[1]
+end
+
+local function try(what)
+   local status, result = pcall(what[1])
+   if not status then
+      what[2](result)
+   end
+   return result
+end
+
 local function ternary(cond, T, F)
   if cond then return T else return F end
 end
@@ -100,7 +112,7 @@ local function load_json(path)
   return nil
 end
 
-local function callTests(tests, notTc)
+local function callTests(tsName, tests, notTc)
   for count = 1, #tests do
     local test = tests[count]
     local function tc()
@@ -115,6 +127,7 @@ local function callTests(tests, notTc)
           end
         end
       else
+        extractors["_context"] = require(tsName)
         currentContext = extractors["_context"]
       end
       local result = {}
@@ -124,14 +137,31 @@ local function callTests(tests, notTc)
       else
         local func = resolveVar(test["request"]["method"])
         local funcToCall = nil
+        local directFuncCall = false
         if func == nil and type(currentContext) == "function" then
+          directFuncCall = true
           funcToCall = currentContext
         elseif type(func) == "string" then
           funcToCall = currentContext[func]
         end
         if type(funcToCall) == "function" then
           local params = makeList(deepResolve(test["request"]["params"]))
-          local ok,err = funcToCall(currentContext,unpack(params))
+          local ok,err
+          try {
+            function()
+              if directFuncCall then
+                ok,err = funcToCall(unpack(params))
+              else
+                ok,err = funcToCall(currentContext,unpack(params))
+              end
+            end,
+            catch {
+              function(error)
+                ok = nil
+                err = error
+              end
+            }
+          }
           result['output'] = ok
           result['error'] = err
         end
@@ -160,30 +190,29 @@ end
 
 local function forOneTS(tsName, patt)
   local tsData = load_json(tsName..patt)
-  extractors["_context"] = require(tsName)
   if is_array(tsData['setup']) then
-    lazy_setup(function()
-      callTests(tsData['setup'], true)
+    setup(function()
+      callTests(tsName, tsData['setup'], true)
     end)
   end
   if is_array(tsData['teardown']) then
-    lazy_teardown(function()
-      callTests(tsData['teardown'], true)
+    teardown(function()
+      callTests(tsName, tsData['teardown'], true)
     end)
   end
   if is_array(tsData['before_each']) then
     before_each(function()
-      callTests(tsData['before_each'], true)
+      callTests(tsName, tsData['before_each'], true)
     end)
   end
   if is_array(tsData['after_each']) then
     after_each(function()
-      callTests(tsData['after_each'], true)
+      callTests(tsName, tsData['after_each'], true)
     end)
   end
   if is_array(tsData['tests']) then
     describe(tsName, function()
-      callTests(tsData['tests'])
+      callTests(tsName, tsData['tests'])
     end)
   end
 end
