@@ -2,7 +2,7 @@ local extractors = {}
 local path = require "pl.path"
 local jsonpath = require "jsonpath"
 local json = require "json"
-require "lfs"
+local lfs = require "lfs"
 
 local function ternary(cond, T, F)
   if cond then return T else return F end
@@ -25,7 +25,7 @@ local function is_array(table)
     return true
   end
   -- only object can have empty length with elements inside
-  for k, v in pairs(table) do
+  for k, v in pairs(table) do -- luacheck:ignore
     return false
   end
   -- if no elements it can be array and not at same time
@@ -88,14 +88,12 @@ local function deepResolve(e)
 end
 
 local function load_json(path)
-  local contents = ""
-  local myTable = {}
   local file = io.open( path, "r" )
 
   if file then
       -- read all contents of file into a string
       local contents = file:read( "*a" )
-      myTable = json.decode(contents);
+      local myTable = json.decode(contents);
       io.close( file )
       return myTable
   end
@@ -114,25 +112,34 @@ local function callTests(tests, notTc)
       else
         currentContext = extractors["_context"]
       end
-      local func = resolveVar(test["request"]["method"])
       local result = {}
-      if type(currentContext[func]) == "function" then
-        local params = makeList(deepResolve(test["request"]["params"]))
-        local ok,err = currentContext[func](currentContext,unpack(params))
-        result['output'] = ok
-        result['error'] = err
-        if type(test["extractors"]) == "table" then
-          for k,v in pairs(test["extractors"]) do
-            local nk = resolveVar(k)
-            if type(nk) == 'string' and hasVariable(nk) == false then
-              extractors[nk] = queryJson(result,v)
-            end
+      if test["request"] == nil then
+        result["output"] = currentContext
+        result["error"] = nil
+      else
+        local func = resolveVar(test["request"]["method"])
+        local funcToCall = currentContext[func]
+        if type(funcToCall) ~= "function" and type(currentContext) == "function" then
+          funcToCall = currentContext
+        end
+        if type(funcToCall) == "function" then
+          local params = makeList(deepResolve(test["request"]["params"]))
+          local ok,err = currentContext[func](currentContext,unpack(params))
+          result['output'] = ok
+          result['error'] = err
+        end
+      end
+      if type(test["extractors"]) == "table" then
+        for k,v in pairs(test["extractors"]) do
+          local nk = resolveVar(k)
+          if type(nk) == 'string' and hasVariable(nk) == false then
+            extractors[nk] = queryJson(result,v)
           end
         end
-        if type(test["assertions"]) == "table" then
-          for k,v in pairs(test["assertions"]) do
-            assert.are.same(deepResolve(v), queryJson(result,resolveVar(k)))
-          end
+      end
+      if type(test["assertions"]) == "table" then
+        for k,v in pairs(test["assertions"]) do
+          assert.are.same(deepResolve(v), queryJson(result,resolveVar(k)))
         end
       end
     end
@@ -188,7 +195,7 @@ for count = 1, #DDLT_GLOBAL_ARGS["root"] do
         local attr=lfs.attributes(entry)
         local tsName = false
         local patt = false
-        for c = 1, #DDLT_GLOBAL_ARGS["p"] do
+        for c = 1, #DDLT_GLOBAL_ARGS["p"] do -- luacheck:ignore
           tsName = ends_with(entry, DDLT_GLOBAL_ARGS["p"][c])
           patt = DDLT_GLOBAL_ARGS["p"][c]
           break

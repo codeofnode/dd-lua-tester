@@ -1,3 +1,5 @@
+-- luacheck:globals Account
+
 Account = {}
 Account.__index = Account
 

@@ -1,7 +1,7 @@
 local path = require 'pl.path'
 local utils = require 'busted.utils'
 
-function script_path()
+local function script_path()
    local str = path.abspath(debug.getinfo(1, "S").source:sub(2))
    return str:match("(.*/)")
 end
@@ -17,7 +17,6 @@ return function(options)
 
   -- Default cli arg values
   local defaultPattern = options.specPattern or '_spec.json'
-  local defaultLoaders = 'json'
 
   local cliArgsParsed = {}
   local bustedArgsParsed = {}
@@ -30,12 +29,6 @@ return function(options)
     if altkey then cliArgsParsed[altkey] = value end
     cliArgsParsed[key] = value
     return true
-  end
-
-  local function append(s1, s2, sep)
-    local sep = sep or ''
-    if not s1 then return s2 end
-    return s1 .. sep .. s2
   end
 
   local function processArg(key, value)
@@ -138,7 +131,7 @@ return function(options)
 
     if bustedConfigFilePath then
       local bustedConfigFile, err = loadfile(bustedConfigFilePath)
-      if bustedConfigFile then
+      if bustedConfigFile and not err then
         local ok, config = pcall(function()
           local conf, err = configLoader(bustedConfigFile(), bustedArgsParsed)
           return conf or error(err, 0)
