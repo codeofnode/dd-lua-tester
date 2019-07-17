@@ -8,6 +8,16 @@ local function catch(what)
    return what[1]
 end
 
+local function extend(table1, table2)
+  for k,v in pairs(table2) do
+    if (type(table1[k]) == 'table' and type(v) == 'table') then
+      extend(table1[k], v)
+    else
+      table1[k] = v
+    end
+	end
+end
+
 local function try(what)
    local status, result = pcall(what[1])
    if not status then
@@ -190,6 +200,11 @@ end
 
 local function forOneTS(tsName, patt)
   local tsData = load_json(tsName..patt)
+
+  if type(tsData['vars']) == "table" then
+    extend(extractors, tsData['vars'])
+  end
+
   if is_array(tsData['setup']) then
     setup(function()
       callTests(tsName, tsData['setup'], true)
