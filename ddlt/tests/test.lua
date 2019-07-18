@@ -197,10 +197,12 @@ local function callTests(tsName, tests, notTc)
         end
       end
     end
-    if notTc == nil and type(test['summary']) == 'string' then
-      it(test['summary'], tc)
-    else
-      tc()
+    if test['disabled'] ~= true then
+      if notTc == nil and type(test['summary']) == 'string' then
+        it(test['summary'], tc)
+      else
+        tc()
+      end
     end
   end
 end
