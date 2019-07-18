@@ -1,5 +1,5 @@
 package = 'dd-lua-tester'
-version = '0.1-1'
+version = '0.1-2'
 source = {
   url = "git://github.com/codeofnode/dd-lua-tester",
   branch = "master"
@@ -13,7 +13,6 @@ description = {
   license = 'MIT <http://opensource.org/licenses/MIT>'
 }
 dependencies = {
-  'lua >= 5.1',
   'lpeg = 1.0.2',
   'lustache = 1.3.1',
   'lua_cliargs = 3.0',

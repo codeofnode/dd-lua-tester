@@ -174,6 +174,7 @@ local function callTests(tsName, tests, notTc)
             end,
             catch {
               function(error)
+                print(error)
                 ok = nil
                 err = error
               end
