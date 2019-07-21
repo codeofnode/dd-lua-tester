@@ -1,9 +1,19 @@
 local extractors = {}
 local lustache = require "lustache"
-local path = require "pl.path"
+local plpath = require "pl.path"
+local plstring = require "pl.stringx"
 local jsonpath = require "jsonpath"
-local json = require "json"
+local json = require "cjson" or require 'json'
 local lfs = require "lfs"
+local resolveVar = nil
+
+local DDLT_DEBUG = os.getenv("DDLT_DEBUG") or '1'
+DDLT_DEBUG = {DDLT_DEBUG:sub(1,1),DDLT_DEBUG:sub(2,2),DDLT_DEBUG:sub(3,3),DDLT_DEBUG:sub(4,4),DDLT_DEBUG:sub(5,5)}
+local LOG_FLAG_BASE = DDLT_DEBUG[1] == '1'
+local LOG_FLAG_METHOD = DDLT_DEBUG[2] == '1' or DDLT_DEBUG[2] == 'm'
+local LOG_FLAG_PARAMS = DDLT_DEBUG[3] == '1' or DDLT_DEBUG[3] == 'p'
+local LOG_FLAG_RESPONSE = DDLT_DEBUG[4] == '1' or DDLT_DEBUG[4] == 's'
+local LOG_FLAG_SUMMARY = DDLT_DEBUG[5] == '1' or DDLT_DEBUG[4] == 's'
 
 local function catch(what)
    return what[1]
@@ -61,23 +71,54 @@ local function ends_with(str, ending)
   end
 end
 
+local function unpackFunctionCall(str,dontResoleParams)
+  local startParamInd, _ = str:find('(', 2, true) -- TODO bad code, `(` can also be part of path
+  if startParamInd ~= nil and ends_with(str, ')') then
+    local funcParamDesc = str:sub(startParamInd+1, -2)
+    startParamInd = startParamInd - 1
+    local funcParams = nil
+    if not dontResoleParams then
+      funcParams = funcParamDesc:split(',')
+      for ind,dt in pairs(funcParams) do
+        funcParams[ind] = resolveVar(dt)
+      end
+    end
+    return str:sub(1, startParamInd), funcParams, startParamInd, funcParamDesc
+  end
+  return str, {}, nil, ''
+end
+
+local function jsonpathquery(data, path, count)
+  local result
+  local npath, funcParams, startParamInd, _ = unpackFunctionCall(path)
+  npath = ternary(starts_with(npath, '$.'), '', '$.')..npath
+  if startParamInd == nil then
+    result = jsonpath.query(data, npath, count)
+  else
+    result = jsonpath.query(data, npath, 1)[1](unpack(funcParams))
+  end
+  return result
+end
+
 local function queryJson(data, path)
-  local res = data;
+  local res = data
   if (type(data) == 'table' and data ~= nil) then
     if starts_with(path, 'LEN()<') then
-      return #(jsonpath.query(data, path:sub(7)))
+      return #(jsonpathquery(data, path:sub(7)))
     elseif (type(path) == 'string' and starts_with(path, 'TYPEOF<')) then
-      return type(jsonpath.query(data, path:sub(8))[1])
+      return type(jsonpathquery(data, path:sub(8))[1])
     elseif starts_with(path, 'ARRAY<') then
-      return jsonpath.query(data, path:sub(7))
+      return jsonpathquery(data, path:sub(7))
     elseif string.find(path, '<', 1, true) == 6 then
       local count = tonumber(path:substr(1, 6), 10)
       if count ~= nil then
-        return jsonpath.query(data, path:sub(7), count);
+        return jsonpathquery(data, path:sub(7), count);
       end
     end
-    res = jsonpath.query(data, path, 1);
-    res = is_array(res) and ternary(#res < 2, res[1], res);
+    res = jsonpathquery(data, path, 1);
+    if is_array(res) and #res < 2 then
+      res = res[1]
+    end
   end
   return res
 end
@@ -86,18 +127,23 @@ local function isFullVariable(str)
   return type(str) == 'string' and starts_with(str, '{{') and ends_with(str, '}}') ~= nil
 end
 
-local function resolveVar(str, from)
+resolveVar = function(str, from)
   if from == nil then
     from = extractors
   end
   if isFullVariable(str) then
-    local result = queryJson(from, (ternary(starts_with(str, '$.'), '', '$.'))..str:sub(3, -3))
+    local result = queryJson(from, str:sub(3, -3))
     if type(result) ~= "string" or result ~= str then
       return result
     end
   end
   if type(str) == 'string' then
-    return lustache:render(str, from)
+    local npath, _, startParamInd, funcParamDesc = unpackFunctionCall(str, true)
+    if startParamInd then
+      return lustache:render(npath, from)..'('..funcParamDesc..')'
+    else
+      return lustache:render(str, from)
+    end
   end
   return str
 end
@@ -133,6 +179,7 @@ local function callTests(tsName, tests, notTc)
   for count = 1, #tests do
     local test = tests[count]
     local function tc()
+      if LOG_FLAG_SUMMARY then print("\nDDLT_TESTCASE_START | ", test['summary']) end
       local currentContext = _G
       if type(test["require"]) == "string" then
         if test["require"] ~= "$global" then
@@ -153,16 +200,20 @@ local function callTests(tsName, tests, notTc)
         result["error"] = nil
       else
         local func = resolveVar(test["request"]["method"])
+        if LOG_FLAG_METHOD then print("DDLT_REQUEST_METHOD | ", test['require'] .. ':' .. (func or '()')) end
         local funcToCall = nil
         local directFuncCall = false
-        if (func == nil or func == "") and type(currentContext) == "function" then
-          directFuncCall = true
-          funcToCall = currentContext
-        elseif type(func) == "string" then
-          funcToCall = currentContext[func]
+        if currentContext then
+          if (func == nil or func == "") and type(currentContext) == "function" then
+            directFuncCall = true
+            funcToCall = currentContext
+          elseif type(func) == "string" then
+            funcToCall = currentContext[func]
+          end
         end
         if type(funcToCall) == "function" then
           local params = makeList(deepResolve(test["request"]["params"]))
+          if LOG_FLAG_PARAMS then print("DDLT_REQUEST_PARAMS | ", json.encode(params)) end
           local ok,err
           try {
             function()
@@ -174,7 +225,7 @@ local function callTests(tsName, tests, notTc)
             end,
             catch {
               function(error)
-                print(error)
+                if LOG_FLAG_BASE then print(error) end
                 ok = nil
                 err = error
               end
@@ -183,6 +234,18 @@ local function callTests(tsName, tests, notTc)
           result['output'] = ok
           result['error'] = err
         end
+      end
+      if LOG_FLAG_RESPONSE then
+        try {
+          function()
+            print("DDLT_RESPONSE       | ", json.encode(result))
+          end,
+          catch {
+            function(error)
+              print("DDLT_RESPONSE       | ", result['output'], result['error'])
+            end
+          }
+        }
       end
       if type(test["extractors"]) == "table" then
         for k,v in pairs(test["extractors"]) do
@@ -194,8 +257,11 @@ local function callTests(tsName, tests, notTc)
       end
       if type(test["assertions"]) == "table" then
         for k,v in pairs(test["assertions"]) do
-          assert.are.same(deepResolve(v), queryJson(result,resolveVar(k)))
+          assert.are.same(deepResolve(v), queryJson(result, resolveVar(k)))
         end
+      end
+      if LOG_FLAG_SUMMARY then
+        print("DDLT_TESTCASE_END   | ", test['summary'])
       end
     end
     if test['disabled'] ~= true then
@@ -250,11 +316,11 @@ for count = 1, #DDLT_GLOBAL_ARGS["root"] do
   end
 
   local function yieldtree(localdir)
-    local dir = path.join(DDLT_GLOBAL_ARGS['d'], localdir)
-    for entry in lfs.dir(dir) do
+    local sdir = plpath.join(DDLT_GLOBAL_ARGS['d'], localdir)
+    for entry in lfs.dir(sdir) do
       if entry ~= "." and entry ~= ".." then
-        entry = path.join(localdir, entry)
-        local attr=lfs.attributes(path.join(DDLT_GLOBAL_ARGS['d'], entry))
+        entry = plpath.join(localdir, entry)
+        local attr=lfs.attributes(plpath.join(DDLT_GLOBAL_ARGS['d'], entry))
         local tsName = false
         local patt = false
         if attr.mode == "directory" then
