@@ -1,10 +1,10 @@
 return function()
   local path = require 'pl.path'
 
-  local cli = require 'ddlt.modules.cli'()
-  local ddlt = require 'ddlt.core'()
-  local appName = ddlt.appName
-  cli:set_name(ddlt.appName)
+  local cli = require 'ddt.modules.cli'()
+  local ddt = require 'ddt.core'()
+  local appName = ddt.appName
+  cli:set_name(ddt.appName)
   local exit = os.exit
 
   local cliArgs, err = cli:parse(arg)
@@ -15,7 +15,7 @@ return function()
 
   if cliArgs.version then
     -- Return early if asked for the version
-    print(ddlt.version)
+    print(ddt.version)
     exit(0)
   end
 

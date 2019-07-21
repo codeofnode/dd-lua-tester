@@ -1,1 +1,1 @@
-require 'ddlt.runner'(require 'ddlt.initcli'())
+require 'ddt.runner'(require 'ddt.initcli'())

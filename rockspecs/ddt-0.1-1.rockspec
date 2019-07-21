@@ -1,5 +1,5 @@
-package = 'dd-lua-tester'
-version = '0.1-2'
+package = 'ddt'
+version = '0.1-1'
 source = {
   url = "git://github.com/codeofnode/dd-lua-tester",
   branch = "master"
@@ -24,15 +24,15 @@ build = {
   type = 'builtin',
   modules = {
     ['jsonpath']                              = 'jsonpath.lua',
-    ['ddlt.core']                             = 'ddlt/core.lua',
-    ['ddlt.initcli']                          = 'ddlt/initcli.lua',
-    ['ddlt.runner']                           = 'ddlt/runner.lua',
-    ['ddlt.modules.cli']                      = 'ddlt/modules/cli.lua',
-    ['ddlt.tests.test']                       = 'ddlt/tests/test.lua',
+    ['ddt.core']                             = 'ddt/core.lua',
+    ['ddt.initcli']                          = 'ddt/initcli.lua',
+    ['ddt.runner']                           = 'ddt/runner.lua',
+    ['ddt.modules.cli']                      = 'ddt/modules/cli.lua',
+    ['ddt.tests.test']                       = 'ddt/tests/test.lua',
   },
   install = {
     bin = {
-      ['ddlt'] = 'bin/cli'
+      ['ddt'] = 'bin/cli'
     }
   }
 }
