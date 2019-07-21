@@ -1,7 +1,6 @@
 local extractors = {}
 local lustache = require "lustache"
 local plpath = require "pl.path"
-local plstring = require "pl.stringx"
 local jsonpath = require "jsonpath"
 local json = require "cjson" or require 'json'
 local lfs = require "lfs"
