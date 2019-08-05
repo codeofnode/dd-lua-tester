@@ -2,17 +2,21 @@ local extractors = {}
 local lustache = require "lustache"
 local plpath = require "pl.path"
 local jsonpath = require "jsonpath"
-local json = require "cjson" or require 'json'
 local lfs = require "lfs"
 local resolveVar = nil
+local result, json = pcall(require, 'cjson')
+if not result then
+  json = require 'json'
+end
 
-local DDLT_DEBUG = os.getenv("DDLT_DEBUG") or '1'
-DDLT_DEBUG = {DDLT_DEBUG:sub(1,1),DDLT_DEBUG:sub(2,2),DDLT_DEBUG:sub(3,3),DDLT_DEBUG:sub(4,4),DDLT_DEBUG:sub(5,5)}
-local LOG_FLAG_BASE = DDLT_DEBUG[1] == '1'
-local LOG_FLAG_METHOD = DDLT_DEBUG[2] == '1' or DDLT_DEBUG[2] == 'm'
-local LOG_FLAG_PARAMS = DDLT_DEBUG[3] == '1' or DDLT_DEBUG[3] == 'p'
-local LOG_FLAG_RESPONSE = DDLT_DEBUG[4] == '1' or DDLT_DEBUG[4] == 's'
-local LOG_FLAG_SUMMARY = DDLT_DEBUG[5] == '1' or DDLT_DEBUG[4] == 's'
+local DDT_DEBUG = os.getenv("DDT_DEBUG") or '1'
+DDT_DEBUG = {DDT_DEBUG:sub(1,1),DDT_DEBUG:sub(2,2),DDT_DEBUG:sub(3,3),DDT_DEBUG:sub(4,4),DDT_DEBUG:sub(5,5)}
+local LOG_FLAG_BASE = DDT_DEBUG[1] == '1'
+local LOG_FLAG_METHOD = DDT_DEBUG[2] == '1' or DDT_DEBUG[2] == 'm'
+local LOG_FLAG_PARAMS = DDT_DEBUG[3] == '1' or DDT_DEBUG[3] == 'p'
+local LOG_FLAG_RESPONSE = DDT_DEBUG[4] == '1' or DDT_DEBUG[4] == 's'
+local LOG_FLAG_SUMMARY = DDT_DEBUG[5] == '1' or DDT_DEBUG[4] == 's'
+local LOG_FLAG_ANYDEBUG = LOG_FLAG_METHOD or LOG_FLAG_PARAMS or LOG_FLAG_RESPONSE or LOG_FLAG_SUMMARY
 
 local function catch(what)
    return what[1]
@@ -175,10 +179,11 @@ local function load_json(path)
 end
 
 local function callTests(tsName, tests, notTc)
+  if LOG_FLAG_ANYDEBUG then print("\n\nDDT_TESTSUITE-".. (notTc or '') .. " starts | ", tsName) end
   for count = 1, #tests do
     local test = tests[count]
     local function tc()
-      if LOG_FLAG_SUMMARY then print("\nDDLT_TESTCASE_START | ", test['summary']) end
+      if LOG_FLAG_SUMMARY then print("DDT_TESTCASE_START | ", test['summary']) end
       local currentContext = _G
       if type(test["require"]) == "string" then
         if test["require"] ~= "$global" then
@@ -199,7 +204,7 @@ local function callTests(tsName, tests, notTc)
         result["error"] = nil
       else
         local func = resolveVar(test["request"]["method"])
-        if LOG_FLAG_METHOD then print("DDLT_REQUEST_METHOD | ", test['require'] .. ':' .. (func or '()')) end
+        if LOG_FLAG_METHOD then print("DDT_REQUEST_METHOD | ", (test['require'] or tsName) .. ':' .. (func or '()')) end
         local funcToCall = nil
         local directFuncCall = false
         if currentContext then
@@ -212,7 +217,7 @@ local function callTests(tsName, tests, notTc)
         end
         if type(funcToCall) == "function" then
           local params = makeList(deepResolve(test["request"]["params"]))
-          if LOG_FLAG_PARAMS then print("DDLT_REQUEST_PARAMS | ", json.encode(params)) end
+          if LOG_FLAG_PARAMS then print("DDT_REQUEST_PARAMS | ", json.encode(params)) end
           local ok,err
           try {
             function()
@@ -237,11 +242,11 @@ local function callTests(tsName, tests, notTc)
       if LOG_FLAG_RESPONSE then
         try {
           function()
-            print("DDLT_RESPONSE       | ", json.encode(result))
+            print("DDT_RESPONSE       | ", json.encode(result))
           end,
           catch {
             function(error)
-              print("DDLT_RESPONSE       | ", result['output'], result['error'])
+              print("DDT_RESPONSE       | ", result['output'], result['error'])
             end
           }
         }
@@ -260,17 +265,18 @@ local function callTests(tsName, tests, notTc)
         end
       end
       if LOG_FLAG_SUMMARY then
-        print("DDLT_TESTCASE_END   | ", test['summary'])
+        print("DDT_TESTCASE_END   | ", test['summary'])
       end
     end
     if test['disabled'] ~= true then
-      if notTc == nil and type(test['summary']) == 'string' then
-        it(test['summary'], tc)
+      if notTc == nil then
+        it(test['summary'] or 'No summary', tc)
       else
         tc()
       end
     end
   end
+  if LOG_FLAG_ANYDEBUG then print("DDT_TESTSUITE-".. (notTc or '') .. " ends | ", tsName) end
 end
 
 local function forOneTS(tsName, patt)
@@ -280,55 +286,65 @@ local function forOneTS(tsName, patt)
     extend(extractors, tsData['vars'])
   end
 
-  if is_array(tsData['setup']) then
-    setup(function()
-      callTests(tsName, tsData['setup'], true)
-    end)
-  end
-  if is_array(tsData['teardown']) then
-    teardown(function()
-      callTests(tsName, tsData['teardown'], true)
-    end)
-  end
-  if is_array(tsData['before_each']) then
-    before_each(function()
-      callTests(tsName, tsData['before_each'], true)
-    end)
-  end
-  if is_array(tsData['after_each']) then
-    after_each(function()
-      callTests(tsName, tsData['after_each'], true)
-    end)
-  end
-  if is_array(tsData['tests']) then
-    describe(tsName, function()
+  describe(tsName, function()
+    if is_array(tsData['setup']) then
+      setup(function()
+        callTests(tsName, tsData['setup'], 'SETUP')
+      end)
+    end
+    if is_array(tsData['lazy_setup']) then
+      lazy_setup(function()
+        callTests(tsName, tsData['lazy_setup'], 'LAZY_SETUP')
+      end)
+    end
+    if is_array(tsData['before_each']) then
+      before_each(function()
+        callTests(tsName, tsData['before_each'], 'BEFORE_EACH')
+      end)
+    end
+    if is_array(tsData['tests']) then
       callTests(tsName, tsData['tests'])
-    end)
-  end
+    end
+    if is_array(tsData['after_each']) then
+      after_each(function()
+        callTests(tsName, tsData['after_each'], 'AFTER_EACH')
+      end)
+    end
+    if is_array(tsData['lazy_teardown']) then
+      lazy_teardown(function()
+        callTests(tsName, tsData['lazy_teardown'], 'LAZY_TEARDOWN')
+      end)
+    end
+    if is_array(tsData['teardown']) then
+      teardown(function()
+        callTests(tsName, tsData['teardown'], 'TEARDOWN')
+      end)
+    end
+  end)
 end
 
-for count = 1, #DDLT_GLOBAL_ARGS["root"] do
-  local dir = DDLT_GLOBAL_ARGS["root"][count]
+for count = 1, #DDT_GLOBAL_ARGS["root"] do
+  local dir = DDT_GLOBAL_ARGS["root"][count]
   assert(dir and dir ~= "", "Please pass directory parameter")
   if string.sub(dir, -1) == "/" then
     dir=string.sub(dir, 1, -2)
   end
 
   local function yieldtree(localdir)
-    local sdir = plpath.join(DDLT_GLOBAL_ARGS['d'], localdir)
+    local sdir = plpath.join(DDT_GLOBAL_ARGS['d'], localdir)
     for entry in lfs.dir(sdir) do
       if entry ~= "." and entry ~= ".." then
         entry = plpath.join(localdir, entry)
-        local attr=lfs.attributes(plpath.join(DDLT_GLOBAL_ARGS['d'], entry))
+        local attr=lfs.attributes(plpath.join(DDT_GLOBAL_ARGS['d'], entry))
         local tsName = false
         local patt = false
         if attr.mode == "directory" then
           yieldtree(entry)
         else
-          for c = 1, #DDLT_GLOBAL_ARGS["p"] do -- luacheck:ignore
-            tsName = ends_with(entry, DDLT_GLOBAL_ARGS["p"][c])
+          for c = 1, #DDT_GLOBAL_ARGS["p"] do -- luacheck:ignore
+            tsName = ends_with(entry, DDT_GLOBAL_ARGS["p"][c])
             if tsName then
-              patt = DDLT_GLOBAL_ARGS["p"][c]
+              patt = DDT_GLOBAL_ARGS["p"][c]
               break
             end
           end

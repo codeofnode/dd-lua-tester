@@ -5,10 +5,12 @@ max_line_length = false
 
 globals = {
   "assert",
-  "DDLT_GLOBAL_ARGS",
+  "DDT_GLOBAL_ARGS",
   "it",
   "setup",
   "teardown",
+  "lazy_setup",
+  "lazy_teardown",
   "before_each",
   "after_each",
   "describe"
