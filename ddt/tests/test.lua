@@ -1,6 +1,7 @@
 local extractors = {}
 local lustache = require "lustache"
 local plpath = require "pl.path"
+local plstringljust = require("pl.stringx").ljust
 local jsonpath = require "jsonpath"
 local lfs = require "lfs"
 local resolveVar = nil
@@ -178,12 +179,16 @@ local function load_json(path)
   return nil
 end
 
+local function print_debug(what)
+  return plstringljust(what, 20)
+end
+
 local function callTests(tsName, tests, notTc)
-  if LOG_FLAG_ANYDEBUG then print("\n\nDDT_TESTSUITE-".. (notTc or '') .. " starts | ", tsName) end
+  if LOG_FLAG_ANYDEBUG then print("\n\n".. print_debug("DDT_TS-".. (notTc or '') .. " starts | "), tsName) end
   for count = 1, #tests do
     local test = tests[count]
     local function tc()
-      if LOG_FLAG_SUMMARY then print("DDT_TESTCASE_START | ", test['summary']) end
+      if LOG_FLAG_SUMMARY then print(print_debug("DDT_TESTCASE_START | "), test['summary']) end
       local currentContext = _G
       if type(test["require"]) == "string" then
         if test["require"] ~= "$global" then
@@ -204,7 +209,7 @@ local function callTests(tsName, tests, notTc)
         result["error"] = nil
       else
         local func = resolveVar(test["request"]["method"])
-        if LOG_FLAG_METHOD then print("DDT_REQUEST_METHOD | ", (test['require'] or tsName) .. ':' .. (func or '()')) end
+        if LOG_FLAG_METHOD then print(print_debug("DDT_REQUEST_METHOD | "), (test['require'] or tsName) .. ':' .. (func or '()')) end
         local funcToCall = nil
         local directFuncCall = false
         if currentContext then
@@ -217,7 +222,7 @@ local function callTests(tsName, tests, notTc)
         end
         if type(funcToCall) == "function" then
           local params = makeList(deepResolve(test["request"]["params"]))
-          if LOG_FLAG_PARAMS then print("DDT_REQUEST_PARAMS | ", json.encode(params)) end
+          if LOG_FLAG_PARAMS then print(print_debug("DDT_REQUEST_PARAMS | "), json.encode(params)) end
           local ok,err
           try {
             function()
@@ -242,11 +247,11 @@ local function callTests(tsName, tests, notTc)
       if LOG_FLAG_RESPONSE then
         try {
           function()
-            print("DDT_RESPONSE       | ", json.encode(result))
+            print(print_debug("DDT_RESPONSE | "), json.encode(result))
           end,
           catch {
             function(error)
-              print("DDT_RESPONSE       | ", result['output'], result['error'])
+              print(print_debug("DDT_RESPONSE | "), result['output'], result['error'])
             end
           }
         }
@@ -265,7 +270,7 @@ local function callTests(tsName, tests, notTc)
         end
       end
       if LOG_FLAG_SUMMARY then
-        print("DDT_TESTCASE_END   | ", test['summary'])
+        print(print_debug("DDT_TESTCASE_END | "), test['summary'])
       end
     end
     if test['disabled'] ~= true then
@@ -276,7 +281,7 @@ local function callTests(tsName, tests, notTc)
       end
     end
   end
-  if LOG_FLAG_ANYDEBUG then print("DDT_TESTSUITE-".. (notTc or '') .. " ends | ", tsName) end
+  if LOG_FLAG_ANYDEBUG then print(print_debug("DDT_TS-".. (notTc or '') .. " ends | "), tsName) end
 end
 
 local function forOneTS(tsName, patt)
